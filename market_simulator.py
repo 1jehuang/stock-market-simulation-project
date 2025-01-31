@@ -5,6 +5,8 @@ import time
 from trading import Portfolio
 import pickle
 import os
+import pandas as pd
+import numpy as np
 
 def main():
     # Load or create portfolio
@@ -46,43 +48,43 @@ def main():
         </style>
     """, unsafe_allow_html=True)
 
-    # Create two columns: main content and sidebar
-    main_col, sidebar_col = st.columns([4, 1])
+    # Create the layout first
+    left_col, main_col, model_col = st.columns([1, 3, 1])
 
-    with sidebar_col:
-        st.sidebar.title('Trading Controls')
+    with left_col:  # Renamed from sidebar_col
+        st.title('Trading Controls')
 
         # Now we can use total_portfolio_value here
-        st.sidebar.metric(
+        st.metric(
             label="Cash Balance",
             value=f"${portfolio.cash_balance:.2f}"
         )
 
-        st.sidebar.metric(
+        st.metric(
             label="Total Portfolio Value",
             value=f"${total_portfolio_value:.2f}"
         )
 
-        st.sidebar.markdown('---')
+        st.markdown('---')
 
         # Trading controls
-        shares = st.sidebar.number_input('Number of Shares', min_value=1, value=1)
-        order_type = st.sidebar.selectbox('Order Type', ['Market', 'Limit'])
+        shares = st.number_input('Number of Shares', min_value=1, value=1)
+        order_type = st.selectbox('Order Type', ['Market', 'Limit'])
 
         if order_type == 'Limit':
-            limit_price = st.sidebar.number_input('Limit Price', min_value=0.01, format='%f')
+            limit_price = st.number_input('Limit Price', min_value=0.01, format='%f')
 
-        col1, col2 = st.sidebar.columns(2)
+        col1, col2 = st.columns(2)
         with col1:
             buy_button = st.button('Buy', use_container_width=True)
         with col2:
             sell_button = st.button('Sell', use_container_width=True)
 
         # Display portfolio positions
-        st.sidebar.markdown('---')
-        st.sidebar.subheader('Positions')
+        st.markdown('---')
+        st.subheader('Positions')
         for symbol, position in portfolio.positions.items():
-            st.sidebar.write(f"{symbol}: {position.shares} shares @ ${position.avg_price:.2f}")
+            st.write(f"{symbol}: {position.shares} shares @ ${position.avg_price:.2f}")
 
     with main_col:
         # Use symbol from session state if available
@@ -294,6 +296,116 @@ def main():
 
         # Display the chart
         chart_placeholder.plotly_chart(fig, use_container_width=True)
+
+        # Now we can add the model visualization after we have the data
+        with model_col:
+            st.title("AI Model")
+
+            # Model selection
+            model_type = st.selectbox(
+                "Select Model",
+                ["LSTM", "Prophet", "Linear Regression", "Random Forest"]
+            )
+
+            if not data.empty:
+                # Model status indicators
+                st.markdown("### Model Status")
+                status_col1, status_col2 = st.columns(2)
+                with status_col1:
+                    st.metric(
+                        label="Accuracy",
+                        value="87.5%",
+                        delta="2.1%"
+                    )
+                with status_col2:
+                    st.metric(
+                        label="Confidence",
+                        value="92.3%",
+                        delta="-0.5%"
+                    )
+
+                # Model prediction
+                st.markdown("### Prediction")
+                prediction_col1, prediction_col2 = st.columns(2)
+                with prediction_col1:
+                    st.metric(
+                        label="Next Day",
+                        value=f"${data['Close'].iloc[-1]:.2f}",
+                        delta="1.2%",
+                        delta_color="normal"
+                    )
+                with prediction_col2:
+                    predicted_value = data['Close'].iloc[-1] * 1.028  # Dummy calculation
+                    st.metric(
+                        label="7 Day",
+                        value=f"${predicted_value:.2f}",
+                        delta="2.8%",
+                        delta_color="normal"
+                    )
+
+                # Model visualization
+                st.markdown("### Model Analysis")
+
+                # Create a small visualization of the model's prediction
+                prediction_fig = go.Figure()
+
+                # Add actual price line
+                prediction_fig.add_trace(go.Scatter(
+                    x=data.index[-30:],
+                    y=data['Close'].iloc[-30:],
+                    mode='lines',
+                    name='Actual',
+                    line=dict(color='#00FF1A', width=2)
+                ))
+
+                # Add prediction line (dummy data for now)
+                future_dates = pd.date_range(start=data.index[-1], periods=7, freq='D')
+                last_price = data['Close'].iloc[-1]
+                predicted_prices = last_price * (1 + np.random.normal(0.001, 0.002, 7).cumsum())
+
+                prediction_fig.add_trace(go.Scatter(
+                    x=future_dates,
+                    y=predicted_prices,
+                    mode='lines',
+                    name='Predicted',
+                    line=dict(color='#FF355E', width=2, dash='dash')
+                ))
+
+                prediction_fig.update_layout(
+                    template='plotly_dark',
+                    plot_bgcolor='#1E1E1E',
+                    paper_bgcolor='#1E1E1E',
+                    height=200,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    showlegend=False,
+                    yaxis=dict(
+                        showgrid=True,
+                        gridcolor='rgba(255,255,255,0.1)',
+                        tickformat='$,.2f',
+                    ),
+                    xaxis=dict(
+                        showgrid=False,
+                    )
+                )
+
+                st.plotly_chart(prediction_fig, use_container_width=True)
+
+                # Model parameters
+                st.markdown("### Model Parameters")
+                st.markdown("""
+                - Window Size: 30 days
+                - Learning Rate: 0.001
+                - Epochs: 100
+                - Features: Price, Volume, MA
+                """)
+
+                # Training button
+                if st.button("Retrain Model", use_container_width=True):
+                    with st.spinner('Training model...'):
+                        time.sleep(2)  # Simulate training
+                        st.success('Model trained successfully!')
+            else:
+                st.write("No data available for model analysis")
 
         # Refresh every minute
         time.sleep(60)

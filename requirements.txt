@@ -3,3 +3,5 @@ pandas
 streamlit
 plotly
 pytz
+tensorflow
+scikit-learn
