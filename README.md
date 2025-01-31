@@ -2,6 +2,8 @@
 
 A simulation platform that combines real-time trading with AI-driven price predictions. Users can trade in a risk-free environment while assessing the accuracy of machine learning insights.
 
+![Stock Market Simulator](assets/image.png)
+
 ## Features
 - **Real-time Market Tracking** – Follow live stock prices and trends.
 - **AI-Powered Predictions** – LSTM, Prophet, Linear Regression, and Random Forest models predict short- and medium-term price movements with confidence metrics.
