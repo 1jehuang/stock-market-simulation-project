@@ -7,6 +7,17 @@ import pickle
 import os
 import pandas as pd
 import numpy as np
+from stock_model import StockPredictor
+
+def load_or_create_model(symbol):
+    model_path = f'models/{symbol}_model.pkl'
+    if not os.path.exists('models'):
+        os.makedirs('models')
+
+    if os.path.exists(model_path):
+        with open(model_path, 'rb') as f:
+            return pickle.load(f)
+    return StockPredictor()
 
 def main():
     # Load or create portfolio
@@ -308,102 +319,187 @@ def main():
             )
 
             if not data.empty:
+                # Load or create model for current symbol
+                model = load_or_create_model(symbol)
+
+                # Model training status
+                if not hasattr(model, 'is_trained') or not model.is_trained:
+                    st.warning("Model needs training")
+                    train_needed = True
+                else:
+                    train_needed = False
+
                 # Model status indicators
                 st.markdown("### Model Status")
                 status_col1, status_col2 = st.columns(2)
                 with status_col1:
                     st.metric(
                         label="Accuracy",
-                        value="87.5%",
-                        delta="2.1%"
+                        value=f"{model.accuracy*100:.1f}%" if hasattr(model, 'accuracy') else "N/A",
+                        delta=None
                     )
                 with status_col2:
                     st.metric(
                         label="Confidence",
-                        value="92.3%",
-                        delta="-0.5%"
+                        value=f"{model.confidence*100:.1f}%" if hasattr(model, 'confidence') else "N/A",
+                        delta=None
                     )
 
-                # Model prediction
-                st.markdown("### Prediction")
-                prediction_col1, prediction_col2 = st.columns(2)
-                with prediction_col1:
-                    st.metric(
-                        label="Next Day",
-                        value=f"${data['Close'].iloc[-1]:.2f}",
-                        delta="1.2%",
-                        delta_color="normal"
-                    )
-                with prediction_col2:
-                    predicted_value = data['Close'].iloc[-1] * 1.028  # Dummy calculation
-                    st.metric(
-                        label="7 Day",
-                        value=f"${predicted_value:.2f}",
-                        delta="2.8%",
-                        delta_color="normal"
-                    )
+                # Get predictions if model is trained
+                if not train_needed:
+                    predictions = model.predict(data)
+                    if predictions is not None:
+                        next_day = predictions[0]
+                        week_ahead = predictions[-1]
+                        current_price = data['Close'].iloc[-1]
 
-                # Model visualization
-                st.markdown("### Model Analysis")
+                        # Calculate percentage changes
+                        next_day_change = ((next_day - current_price) / current_price) * 100
+                        week_change = ((week_ahead - current_price) / current_price) * 100
 
-                # Create a small visualization of the model's prediction
-                prediction_fig = go.Figure()
+                        # Model prediction
+                        st.markdown("### Prediction")
+                        prediction_col1, prediction_col2 = st.columns(2)
+                        with prediction_col1:
+                            st.metric(
+                                label="Next Day",
+                                value=f"${next_day:.2f}",
+                                delta=f"{next_day_change:.1f}%",
+                                delta_color="normal" if next_day_change >= 0 else "inverse"
+                            )
+                        with prediction_col2:
+                            st.metric(
+                                label="7 Day",
+                                value=f"${week_ahead:.2f}",
+                                delta=f"{week_change:.1f}%",
+                                delta_color="normal" if week_change >= 0 else "inverse"
+                            )
 
-                # Add actual price line
-                prediction_fig.add_trace(go.Scatter(
-                    x=data.index[-30:],
-                    y=data['Close'].iloc[-30:],
-                    mode='lines',
-                    name='Actual',
-                    line=dict(color='#00FF1A', width=2)
-                ))
+                        # Model visualization
+                        st.markdown("### Model Analysis")
+                        prediction_fig = go.Figure()
 
-                # Add prediction line (dummy data for now)
-                future_dates = pd.date_range(start=data.index[-1], periods=7, freq='D')
-                last_price = data['Close'].iloc[-1]
-                predicted_prices = last_price * (1 + np.random.normal(0.001, 0.002, 7).cumsum())
+                        # Add actual price line
+                        prediction_fig.add_trace(go.Scatter(
+                            x=data.index[-30:],
+                            y=data['Close'].iloc[-30:],
+                            mode='lines',
+                            name='Actual',
+                            line=dict(color='#00FF1A', width=2)
+                        ))
 
-                prediction_fig.add_trace(go.Scatter(
-                    x=future_dates,
-                    y=predicted_prices,
-                    mode='lines',
-                    name='Predicted',
-                    line=dict(color='#FF355E', width=2, dash='dash')
-                ))
+                        # Add prediction line
+                        future_dates = pd.date_range(start=data.index[-1], periods=len(predictions), freq='D')
+                        prediction_fig.add_trace(go.Scatter(
+                            x=future_dates,
+                            y=predictions,
+                            mode='lines',
+                            name='Predicted',
+                            line=dict(color='#FF355E', width=2, dash='dash')
+                        ))
 
-                prediction_fig.update_layout(
-                    template='plotly_dark',
-                    plot_bgcolor='#1E1E1E',
-                    paper_bgcolor='#1E1E1E',
-                    height=200,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    showlegend=False,
-                    yaxis=dict(
-                        showgrid=True,
-                        gridcolor='rgba(255,255,255,0.1)',
-                        tickformat='$,.2f',
-                    ),
-                    xaxis=dict(
-                        showgrid=False,
-                    )
-                )
+                        prediction_fig.update_layout(
+                            template='plotly_dark',
+                            plot_bgcolor='#1E1E1E',
+                            paper_bgcolor='#1E1E1E',
+                            height=200,
+                            margin=dict(l=10, r=10, t=10, b=10),
+                            showlegend=True,
+                            yaxis=dict(
+                                showgrid=True,
+                                gridcolor='rgba(255,255,255,0.1)',
+                                tickformat='$,.2f',
+                            ),
+                            xaxis=dict(
+                                showgrid=False,
+                            )
+                        )
 
-                st.plotly_chart(prediction_fig, use_container_width=True)
+                        st.plotly_chart(prediction_fig, use_container_width=True)
 
                 # Model parameters
                 st.markdown("### Model Parameters")
-                st.markdown("""
-                - Window Size: 30 days
+                st.markdown(f"""
+                - Window Size: {model.window_size} days
                 - Learning Rate: 0.001
                 - Epochs: 100
-                - Features: Price, Volume, MA
+                - Features: Price, Volume
                 """)
 
                 # Training button
-                if st.button("Retrain Model", use_container_width=True):
+                if st.button("Train Model", use_container_width=True):
+                    # Create placeholders for progress and metrics
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    metrics_cols = st.columns(2)
+
+                    train_metric = metrics_cols[0].empty()
+                    val_metric = metrics_cols[1].empty()
+
+                    # Create a plot placeholder for loss curves
+                    loss_plot = st.empty()
+
                     with st.spinner('Training model...'):
-                        time.sleep(2)  # Simulate training
-                        st.success('Model trained successfully!')
+                        try:
+                            # Train the model with progress tracking
+                            history = model.train(data, progress_bar=progress_bar)
+
+                            # Create loss curves plot
+                            fig = go.Figure()
+                            epochs = list(range(1, len(history['train_loss']) + 1))
+
+                            # Add training loss
+                            fig.add_trace(go.Scatter(
+                                x=epochs,
+                                y=history['train_loss'],
+                                mode='lines',
+                                name='Training Loss',
+                                line=dict(color='#00FF1A')
+                            ))
+
+                            # Add validation loss
+                            fig.add_trace(go.Scatter(
+                                x=epochs,
+                                y=history['val_loss'],
+                                mode='lines',
+                                name='Validation Loss',
+                                line=dict(color='#FF355E')
+                            ))
+
+                            fig.update_layout(
+                                template='plotly_dark',
+                                plot_bgcolor='#1E1E1E',
+                                paper_bgcolor='#1E1E1E',
+                                title='Training Progress',
+                                xaxis_title='Epoch',
+                                yaxis_title='Loss',
+                                height=300
+                            )
+
+                            # Update the plot
+                            loss_plot.plotly_chart(fig, use_container_width=True)
+
+                            # Save the trained model
+                            with open(f'models/{symbol}_model.pkl', 'wb') as f:
+                                pickle.dump(model, f)
+
+                            # Clear progress indicators
+                            progress_bar.empty()
+                            status_text.success('Model trained successfully!')
+
+                            # Display final metrics
+                            train_metric.metric(
+                                "Final Training Accuracy",
+                                f"{history['train_acc'][-1]*100:.2f}%"
+                            )
+                            val_metric.metric(
+                                "Final Validation Accuracy",
+                                f"{history['val_acc'][-1]*100:.2f}%"
+                            )
+
+                        except Exception as e:
+                            st.error(f'Error training model: {str(e)}')
+                            print(f"Detailed error: {e}")  # For debugging
             else:
                 st.write("No data available for model analysis")
 
