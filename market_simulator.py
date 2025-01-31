@@ -40,6 +40,44 @@ def main():
     # Create two columns: main content and sidebar
     main_col, sidebar_col = st.columns([4, 1])
 
+    with sidebar_col:
+        st.sidebar.title('Trading Controls')
+        # Trading controls
+        shares = st.sidebar.number_input('Number of Shares', min_value=1, value=1)
+        order_type = st.sidebar.selectbox('Order Type', ['Market', 'Limit'])
+
+        if order_type == 'Limit':
+            limit_price = st.sidebar.number_input('Limit Price', min_value=0.01, format='%f')
+
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            buy_button = st.button('Buy', use_container_width=True)
+        with col2:
+            sell_button = st.button('Sell', use_container_width=True)
+
+        # Portfolio section
+        st.sidebar.markdown('---')
+        st.sidebar.subheader('Portfolio')
+        balance = st.sidebar.number_input('Cash Balance ($)',
+                                        min_value=0,
+                                        value=10000,
+                                        format='%.2f')
+
+        # Display portfolio positions
+        st.sidebar.markdown('---')
+        st.sidebar.subheader('Positions')
+        for symbol, position in portfolio.positions.items():
+            st.sidebar.write(f"{symbol}: {position.shares} shares @ ${position.avg_price:.2f}")
+
+        st.sidebar.markdown('---')
+        st.sidebar.write(f"Cash Balance: ${portfolio.cash_balance:.2f}")
+
+        # Add at the bottom of the sidebar
+        st.sidebar.markdown('---')
+        if st.sidebar.button('Back to Home'):
+            st.session_state.page = 'home'
+            st.rerun()
+
     with main_col:
         # Use symbol from session state if available
         default_symbol = st.session_state.get('symbol', 'NVDA')
@@ -112,6 +150,7 @@ def main():
             st.error("Unable to get current price. Please try again later.")
             return
 
+        # After getting the data and current price, handle trading actions
         if buy_button:
             success, message = portfolio.place_order(
                 symbol,
@@ -265,44 +304,6 @@ def main():
         # Refresh every minute
         time.sleep(60)
         st.rerun()
-
-    with sidebar_col:
-        st.sidebar.title('Trading Controls')
-        # Trading controls
-        shares = st.sidebar.number_input('Number of Shares', min_value=1, value=1)
-        order_type = st.sidebar.selectbox('Order Type', ['Market', 'Limit'])
-
-        if order_type == 'Limit':
-            limit_price = st.sidebar.number_input('Limit Price', min_value=0.01, format='%f')
-
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            buy_button = st.button('Buy', use_container_width=True)
-        with col2:
-            sell_button = st.button('Sell', use_container_width=True)
-
-        # Portfolio section
-        st.sidebar.markdown('---')
-        st.sidebar.subheader('Portfolio')
-        balance = st.sidebar.number_input('Cash Balance ($)',
-                                        min_value=0,
-                                        value=10000,
-                                        format='%.2f')
-
-        # Display portfolio positions
-        st.sidebar.markdown('---')
-        st.sidebar.subheader('Positions')
-        for symbol, position in portfolio.positions.items():
-            st.sidebar.write(f"{symbol}: {position.shares} shares @ ${position.avg_price:.2f}")
-
-        st.sidebar.markdown('---')
-        st.sidebar.write(f"Cash Balance: ${portfolio.cash_balance:.2f}")
-
-        # Add at the bottom of the sidebar
-        st.sidebar.markdown('---')
-        if st.sidebar.button('Back to Home'):
-            st.session_state.page = 'home'
-            st.rerun()
 
 if __name__ == "__main__":
     main()
