@@ -14,6 +14,15 @@ def main():
     else:
         portfolio = Portfolio()
 
+    # Calculate total portfolio value at the start
+    total_portfolio_value = portfolio.cash_balance
+    for pos_symbol, position in portfolio.positions.items():
+        fetcher = StockDataFetcher(pos_symbol)
+        current_data = fetcher.get_realtime_data()
+        if not current_data.empty:
+            current_price = current_data['Close'].iloc[-1]
+            total_portfolio_value += position.shares * current_price
+
     # Remove default padding
     st.set_page_config(layout="wide")
 
@@ -42,6 +51,20 @@ def main():
 
     with sidebar_col:
         st.sidebar.title('Trading Controls')
+
+        # Now we can use total_portfolio_value here
+        st.sidebar.metric(
+            label="Cash Balance",
+            value=f"${portfolio.cash_balance:.2f}"
+        )
+
+        st.sidebar.metric(
+            label="Total Portfolio Value",
+            value=f"${total_portfolio_value:.2f}"
+        )
+
+        st.sidebar.markdown('---')
+
         # Trading controls
         shares = st.sidebar.number_input('Number of Shares', min_value=1, value=1)
         order_type = st.sidebar.selectbox('Order Type', ['Market', 'Limit'])
@@ -55,36 +78,17 @@ def main():
         with col2:
             sell_button = st.button('Sell', use_container_width=True)
 
-        # Portfolio section
-        st.sidebar.markdown('---')
-        st.sidebar.subheader('Portfolio')
-        balance = st.sidebar.number_input('Cash Balance ($)',
-                                        min_value=0,
-                                        value=10000,
-                                        format='%.2f')
-
         # Display portfolio positions
         st.sidebar.markdown('---')
         st.sidebar.subheader('Positions')
         for symbol, position in portfolio.positions.items():
             st.sidebar.write(f"{symbol}: {position.shares} shares @ ${position.avg_price:.2f}")
 
-        st.sidebar.markdown('---')
-        st.sidebar.write(f"Cash Balance: ${portfolio.cash_balance:.2f}")
-
-        # Add at the bottom of the sidebar
-        st.sidebar.markdown('---')
-        if st.sidebar.button('Back to Home'):
-            st.session_state.page = 'home'
-            st.rerun()
-
     with main_col:
         # Use symbol from session state if available
-        default_symbol = st.session_state.get('symbol', 'NVDA')
+        default_symbol = 'NVDA'  # Simplified to just use default
         symbol = st.text_input('Search for symbol', default_symbol,
                              help="Enter a stock symbol (e.g., AAPL, MSFT, GOOGL)")
-        # Update session state with current symbol
-        st.session_state.symbol = symbol
 
         # Time interval buttons in a more compact layout
         col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -205,16 +209,6 @@ def main():
         for pos_symbol, position in portfolio.positions.items():
             if pos_symbol == symbol:  # If we have current price for this symbol
                 total_portfolio_value += position.shares * current_price
-
-        st.sidebar.metric(
-            label="Cash Balance",
-            value=f"${portfolio.cash_balance:.2f}"
-        )
-
-        st.sidebar.metric(
-            label="Total Portfolio Value",
-            value=f"${total_portfolio_value:.2f}"
-        )
 
         # Create and display chart
         fig = go.Figure()
